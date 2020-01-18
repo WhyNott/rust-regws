@@ -23,30 +23,55 @@ struct Action {
 
 use crate::Object::*;
 use crate::GroundLiteral::*;
-use std::collections::BTreeSet;
 
 
-type State = BTreeSet<GroundLiteral>;
+
+type State = Vec<GroundLiteral>;
 
 //methods I need:
 //isSubset
-//contains
 //remove
 
 //I reckon, the size of cur_goals and the add/remove fields will always be smaller then the amount of branching that will need to be done. Hence, it doesn't really make sense to use hashsets/BTreesets, even if it will make big Oh better. 
 
-fn regws_wrap<'a, F>(init_state: &State, cur_goals: &State, past_goals: &mut BTreeSet<State>, actions: &'a [Action; 18], path: &mut Vec<&'a Action>, mut continuation : F) where F: FnMut(&Vec<&Action>) + Clone {
+fn is_subset<T>(a: &[T], b: &[T]) -> bool where T: PartialEq {
+    for item1 in a {
+	let mut present = false;
+	for item2 in b {
+	    if item1 == item2 {
+		present = true;
+	    }
+	}
+	if !present {
+	    return false
+	}
+    }   
+    true
+}
+
+fn remove<T>(item: T, vector: &mut Vec<T>) -> bool where T: PartialEq {
+    for (i, element) in vector.iter().enumerate() {
+	if *element == item {
+	    vector.swap_remove(i);
+	    return true  
+	}
+    }
+    false
+}
+
+
+fn regws_wrap<'a, F>(init_state: &State, cur_goals: &State, past_goals: &mut Vec<State>, actions: &'a [Action; 18], path: &mut Vec<&'a Action>, continuation : &F) where F: Fn(&Vec<&Action>) + Clone {
     for depth in 1..8 {
-	regws(depth, init_state, cur_goals, past_goals, actions, path, continuation.clone());
+	regws(depth, init_state, cur_goals, past_goals, actions, path, continuation);
     }
     
 }
 
 
 
-fn regws<'a, F>(depth: u8, init_state: &State, mut cur_goals: &State,  past_goals: &mut BTreeSet<State>, actions:  &'a [Action; 18],  path: &mut Vec<&'a Action>, mut continuation : F) where F: FnMut(&Vec<&Action>) + Clone {
+fn regws<'a, F>(depth: u8, init_state: &State, mut cur_goals: &State,  past_goals: &mut Vec<State>, actions:  &'a [Action; 18],  path: &mut Vec<&'a Action>, continuation : F) where F: Fn(&Vec<&Action>) + Clone {
     if depth > 0  {
-	if cur_goals.is_subset(init_state){
+	if is_subset(cur_goals, init_state){
 	    continuation(path);
 	} else {
 	    
@@ -61,7 +86,7 @@ fn regws<'a, F>(depth: u8, init_state: &State, mut cur_goals: &State,  past_goal
 			}
 		    }
 		
-		    if success == true {
+		    if success {
 			for y in act.remove.iter() {
 			    if cur_goals.contains(y){
 				success = false;
@@ -69,26 +94,27 @@ fn regws<'a, F>(depth: u8, init_state: &State, mut cur_goals: &State,  past_goal
 			    }
 			}
 		    }
+		
 
 		let mut next_goals = cur_goals.clone();
-		    if success == true  {
+		    if success  {
 			for element in act.add.iter() {
 			    if *element == End {
 				break;
 			    }
-			    next_goals.remove(element);
+			    remove(*element, &mut next_goals);
 			}
 			for element in act.preconditions.iter() {
 			    if *element == End {
 				break;
 			    }
-			    next_goals.insert(*element);
+			    next_goals.push(*element);
 			}
 			
 		    }
 
 		if !past_goals.contains(cur_goals){
-		    past_goals.insert(cur_goals.clone());
+		    past_goals.push(cur_goals.clone());
 
 		   
 		    path.push(act);
@@ -97,7 +123,7 @@ fn regws<'a, F>(depth: u8, init_state: &State, mut cur_goals: &State,  past_goal
 
 		    regws(depth-1, init_state, &next_goals, past_goals, actions, path, continuation.clone());
 
-		    past_goals.remove(cur_goals);
+		    past_goals.pop();
 		    path.pop();
 		    }
 		
@@ -232,15 +258,14 @@ fn main() {
 	}
 	 std::process::exit(0); // so that it only gives 1 solution
     };
-    let init : BTreeSet<_> = vec![On(A, Table), On(B, Table), On(C, A),
-				  Clear(B), Clear(C)].into_iter().collect();
-    let mut goal : BTreeSet<_> = vec![On(A, B), On(B, C), On(A, A)].into_iter().collect();
+    let init : Vec<_> = vec![On(A, Table), On(B, Table), On(C, A),
+				  Clear(B), Clear(C)];
+    let mut goal : Vec<_> = vec![On(A, B), On(B, C)];
 
-    let mut past_goals = BTreeSet::new();
-    
+    let mut past_goals = Vec::new();
     
   
-    regws_wrap(&init, &mut goal, &mut past_goals, &actions, &mut path, hello);
+    regws_wrap(&init, &mut goal, &mut past_goals, &actions, &mut path, &hello);
 
     println!("No solutions found!");
 }
